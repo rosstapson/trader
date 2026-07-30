@@ -1,11 +1,13 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { searchCompanies } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
-export function SearchView({ onSelect }: { onSelect: (symbol: string) => void }) {
+export function SearchView() {
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState("");
 
@@ -41,7 +43,7 @@ export function SearchView({ onSelect }: { onSelect: (symbol: string) => void })
           <Card
             key={result.symbol}
             className="cursor-pointer hover:border-neutral-400"
-            onClick={() => onSelect(result.symbol)}
+            onClick={() => navigate(`/company/${result.symbol}`)}
           >
             <CardContent className="flex items-center justify-between py-3">
               <div>

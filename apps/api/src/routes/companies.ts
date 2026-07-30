@@ -1,10 +1,10 @@
 import { Router } from "express";
 import { z } from "zod";
-import { db, companies } from "@trader/db";
 import { ResearchAgent } from "@trader/ai";
 import { computeValuations, type CompanyOverview } from "@trader/shared";
 import { getMarketDataProvider, getOrchestrator } from "../providers.js";
 import { getDefaultUserId } from "../user.js";
+import { upsertCompanyProfile } from "../services/company-cache.js";
 
 export const companiesRouter: Router = Router();
 
@@ -29,36 +29,11 @@ async function fetchOverview(symbol: string): Promise<CompanyOverview> {
   return { profile, quote, financials, news };
 }
 
-async function cacheCompanyProfile(overview: CompanyOverview): Promise<void> {
-  const { profile } = overview;
-  await db
-    .insert(companies)
-    .values({
-      symbol: profile.symbol,
-      name: profile.name,
-      exchange: profile.exchange,
-      sector: profile.sector,
-      industry: profile.industry,
-      description: profile.description,
-    })
-    .onConflictDoUpdate({
-      target: companies.symbol,
-      set: {
-        name: profile.name,
-        exchange: profile.exchange,
-        sector: profile.sector,
-        industry: profile.industry,
-        description: profile.description,
-        updatedAt: new Date(),
-      },
-    });
-}
-
 companiesRouter.get("/:symbol/overview", async (req, res, next) => {
   try {
     const symbol = z.string().min(1).parse(req.params.symbol).toUpperCase();
     const overview = await fetchOverview(symbol);
-    await cacheCompanyProfile(overview);
+    await upsertCompanyProfile(overview.profile);
     res.json(overview);
   } catch (err) {
     next(err);
@@ -89,7 +64,7 @@ companiesRouter.get("/:symbol/summary", async (req, res, next) => {
   try {
     const symbol = z.string().min(1).parse(req.params.symbol).toUpperCase();
     const overview = await fetchOverview(symbol);
-    await cacheCompanyProfile(overview);
+    await upsertCompanyProfile(overview.profile);
 
     const cashFlow = await getMarketDataProvider().getCashFlow(symbol);
     const valuations = computeValuations({

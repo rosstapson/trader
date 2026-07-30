@@ -10,6 +10,7 @@ import type {
   DividendEvent,
   PricePoint,
   CashFlowSummary,
+  EarningsInfo,
 } from "@trader/shared";
 import type { MarketDataProvider } from "../provider.js";
 
@@ -22,6 +23,7 @@ const TTL_MS = {
   dividends: 24 * 60 * 60 * 1000, // declared quarterly at most
   priceHistory: 4 * 60 * 60 * 1000, // daily closes; refresh a few times a day, not every request
   cashflow: 24 * 60 * 60 * 1000, // used for the DCF estimate; annual filings
+  earnings: 12 * 60 * 60 * 1000, // next report date rarely moves; checked by the alert job twice a day
 } as const;
 
 /**
@@ -95,5 +97,9 @@ export class CachedMarketDataProvider implements MarketDataProvider {
 
   getCashFlow(symbol: string): Promise<CashFlowSummary> {
     return this.cached("cashflow", symbol, () => this.inner.getCashFlow(symbol));
+  }
+
+  getNextEarnings(symbol: string): Promise<EarningsInfo> {
+    return this.cached("earnings", symbol, () => this.inner.getNextEarnings(symbol));
   }
 }

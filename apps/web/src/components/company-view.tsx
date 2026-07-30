@@ -1,3 +1,4 @@
+import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import type { Confidence } from "@trader/shared";
 import { getCompanyOverview, getCompanySummary, getDividendHistory, getPriceHistory } from "@/lib/api";
@@ -8,6 +9,8 @@ import { Term } from "@/components/ui/term";
 import { Disclaimer } from "@/components/disclaimer";
 import { PriceChart } from "@/components/price-chart";
 import { DividendHistory } from "@/components/dividend-history";
+import { AddToWatchlistButton } from "@/components/add-to-watchlist-button";
+import { CreateAlertButton } from "@/components/create-alert-button";
 
 const CONFIDENCE_COLOR: Record<Confidence, string> = {
   low: "border-red-300 text-red-700 dark:border-red-800 dark:text-red-400",
@@ -15,7 +18,10 @@ const CONFIDENCE_COLOR: Record<Confidence, string> = {
   high: "border-green-300 text-green-700 dark:border-green-800 dark:text-green-400",
 };
 
-export function CompanyView({ symbol, onBack }: { symbol: string; onBack: () => void }) {
+export function CompanyView() {
+  const { symbol = "" } = useParams<{ symbol: string }>();
+  const navigate = useNavigate();
+
   const overviewQuery = useQuery({
     queryKey: ["overview", symbol],
     queryFn: () => getCompanyOverview(symbol),
@@ -43,8 +49,8 @@ export function CompanyView({ symbol, onBack }: { symbol: string; onBack: () => 
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-4 p-6">
-      <Button variant="ghost" size="sm" className="w-fit" onClick={onBack}>
-        ← Back to search
+      <Button variant="ghost" size="sm" className="w-fit" onClick={() => navigate(-1)}>
+        ← Back
       </Button>
 
       {overviewQuery.isLoading && <p className="text-sm text-neutral-500">Loading…</p>}
@@ -54,13 +60,19 @@ export function CompanyView({ symbol, onBack }: { symbol: string; onBack: () => 
 
       {overview && (
         <>
-          <div>
-            <h1 className="text-2xl font-semibold">
-              {overview.profile.name} <span className="text-neutral-400">({overview.profile.symbol})</span>
-            </h1>
-            <p className="text-sm text-neutral-500">
-              {overview.profile.sector} · {overview.profile.industry}
-            </p>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-semibold">
+                {overview.profile.name} <span className="text-neutral-400">({overview.profile.symbol})</span>
+              </h1>
+              <p className="text-sm text-neutral-500">
+                {overview.profile.sector} · {overview.profile.industry}
+              </p>
+            </div>
+            <div className="flex flex-col items-end gap-2">
+              <AddToWatchlistButton symbol={overview.profile.symbol} />
+              <CreateAlertButton symbol={overview.profile.symbol} />
+            </div>
           </div>
 
           <Card>

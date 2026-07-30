@@ -16,6 +16,7 @@
     "@trader/market-data": "workspace:*",
     "@trader/shared": "workspace:*",
     "cors": "^2.8.5",
+    "decimal.js": "^10.4.3",
     "drizzle-orm": "^0.36.4",
     "express": "^4.21.1",
     "zod": "^3.23.8"

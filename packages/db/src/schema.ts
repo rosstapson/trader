@@ -1,5 +1,6 @@
 import {
   pgTable,
+  pgEnum,
   uuid,
   text,
   timestamp,
@@ -54,9 +55,39 @@ export const watchlistItems = pgTable(
     symbol: varchar("symbol", { length: 20 })
       .notNull()
       .references(() => companies.symbol),
+    // Optional hypothetical position size for the lightweight Phase 2 portfolio
+    // simulation — not a real position. Full buy/sell/cash tracking is Phase 4.
+    shares: numeric("shares", { precision: 18, scale: 6 }),
     addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [uniqueIndex("watchlist_items_unique_idx").on(table.watchlistId, table.symbol)],
+);
+
+export const alertKindEnum = pgEnum("alert_kind", ["price_above", "price_below", "news", "earnings"]);
+export const alertStatusEnum = pgEnum("alert_status", ["active", "triggered", "dismissed"]);
+
+/**
+ * In-app only for now — no email/SMS infra exists yet. The background checker job
+ * (apps/api) flips status to "triggered"; the UI surfaces those and lets the user
+ * dismiss them. threshold is only meaningful for price_above/price_below.
+ */
+export const alerts = pgTable(
+  "alerts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    symbol: varchar("symbol", { length: 20 }).notNull(),
+    kind: alertKindEnum("kind").notNull(),
+    threshold: numeric("threshold", { precision: 14, scale: 4 }),
+    status: alertStatusEnum("status").notNull().default("active"),
+    triggeredAt: timestamp("triggered_at", { withTimezone: true }),
+    triggeredMessage: text("triggered_message"),
+    lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("alerts_user_id_idx").on(table.userId), index("alerts_status_idx").on(table.status)],
 );
 
 /**

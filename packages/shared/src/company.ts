@@ -51,6 +51,13 @@ export const cashFlowSummarySchema = z.object({
 });
 export type CashFlowSummary = z.infer<typeof cashFlowSummarySchema>;
 
+export const earningsInfoSchema = z.object({
+  symbol: z.string(),
+  nextReportDate: z.string().nullable(), // YYYY-MM-DD
+  estimate: z.string().nullable(),
+});
+export type EarningsInfo = z.infer<typeof earningsInfoSchema>;
+
 export const newsItemSchema = z.object({
   title: z.string(),
   url: z.string(),

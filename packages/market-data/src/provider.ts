@@ -7,6 +7,7 @@ import type {
   DividendEvent,
   PricePoint,
   CashFlowSummary,
+  EarningsInfo,
 } from "@trader/shared";
 
 /**
@@ -23,6 +24,7 @@ export interface MarketDataProvider {
   getDividendHistory(symbol: string): Promise<DividendEvent[]>;
   getPriceHistory(symbol: string): Promise<PricePoint[]>;
   getCashFlow(symbol: string): Promise<CashFlowSummary>;
+  getNextEarnings(symbol: string): Promise<EarningsInfo>;
 }
 
 export class MarketDataError extends Error {

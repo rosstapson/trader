@@ -17,6 +17,7 @@
     "clsx": "^2.1.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "react-router-dom": "^6.28.0",
     "tailwind-merge": "^2.5.5"
   },
   "devDependencies": {

@@ -7,6 +7,7 @@ import type {
   DividendEvent,
   PricePoint,
   CashFlowSummary,
+  EarningsInfo,
 } from "@trader/shared";
 import type { MarketDataProvider } from "../provider.js";
 import { MarketDataError } from "../provider.js";
@@ -33,11 +34,9 @@ export class AlphaVantageProvider implements MarketDataProvider {
 
   constructor(private readonly apiKey: string) {}
 
-  private request<T>(params: Record<string, string>): Promise<T> {
-    const result = this.queue.then(
-      () => this.doRequest<T>(params),
-      () => this.doRequest<T>(params),
-    );
+  /** Runs `task` through the shared pacing queue so every endpoint — JSON or CSV — respects the same rate limit. */
+  private schedule<T>(task: () => Promise<T>): Promise<T> {
+    const result = this.queue.then(task, task);
     // Advance the queue unconditionally so one failed call doesn't wedge every call after it.
     this.queue = result.then(
       () => undefined,
@@ -46,34 +45,58 @@ export class AlphaVantageProvider implements MarketDataProvider {
     return result;
   }
 
-  private async doRequest<T>(params: Record<string, string>): Promise<T> {
-    const wait = this.lastRequestAt + MIN_REQUEST_INTERVAL_MS - Date.now();
-    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
-    this.lastRequestAt = Date.now();
-
+  private buildUrl(params: Record<string, string>): URL {
     const url = new URL(BASE_URL);
     for (const [key, value] of Object.entries(params)) {
       url.searchParams.set(key, value);
     }
     url.searchParams.set("apikey", this.apiKey);
+    return url;
+  }
 
-    let res: Response;
-    try {
-      res = await fetch(url);
-    } catch (err) {
-      throw new MarketDataError("Alpha Vantage request failed", this.name, err);
-    }
-    if (!res.ok) {
-      throw new MarketDataError(`Alpha Vantage HTTP ${res.status}`, this.name);
-    }
-    const json = (await res.json()) as Record<string, unknown>;
-    if (json["Note"] || json["Information"]) {
-      throw new MarketDataError(
-        String(json["Note"] ?? json["Information"]),
-        this.name,
-      );
-    }
-    return json as T;
+  private async pace(): Promise<void> {
+    const wait = this.lastRequestAt + MIN_REQUEST_INTERVAL_MS - Date.now();
+    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+    this.lastRequestAt = Date.now();
+  }
+
+  private request<T>(params: Record<string, string>): Promise<T> {
+    return this.schedule(async () => {
+      await this.pace();
+
+      let res: Response;
+      try {
+        res = await fetch(this.buildUrl(params));
+      } catch (err) {
+        throw new MarketDataError("Alpha Vantage request failed", this.name, err);
+      }
+      if (!res.ok) {
+        throw new MarketDataError(`Alpha Vantage HTTP ${res.status}`, this.name);
+      }
+      const json = (await res.json()) as Record<string, unknown>;
+      if (json["Note"] || json["Information"]) {
+        throw new MarketDataError(String(json["Note"] ?? json["Information"]), this.name);
+      }
+      return json as T;
+    });
+  }
+
+  /** A handful of endpoints (EARNINGS_CALENDAR) return CSV instead of JSON. */
+  private requestCsv(params: Record<string, string>): Promise<string> {
+    return this.schedule(async () => {
+      await this.pace();
+
+      let res: Response;
+      try {
+        res = await fetch(this.buildUrl(params));
+      } catch (err) {
+        throw new MarketDataError("Alpha Vantage request failed", this.name, err);
+      }
+      if (!res.ok) {
+        throw new MarketDataError(`Alpha Vantage HTTP ${res.status}`, this.name);
+      }
+      return res.text();
+    });
   }
 
   /** getProfile and getFinancials both read the OVERVIEW endpoint; coalesce concurrent calls into one request. */
@@ -199,6 +222,26 @@ export class AlphaVantageProvider implements MarketDataProvider {
     const freeCashFlow = operating !== null && capex !== null ? String(operating - capex) : null;
 
     return { symbol, freeCashFlow, fiscalDateEnding: latest.fiscalDateEnding ?? null };
+  }
+
+  async getNextEarnings(symbol: string): Promise<EarningsInfo> {
+    const csv = await this.requestCsv({ function: "EARNINGS_CALENDAR", symbol, horizon: "3month" });
+    const lines = csv.trim().split("\n").filter(Boolean);
+    if (lines.length < 2) {
+      return { symbol, nextReportDate: null, estimate: null };
+    }
+
+    const header = lines[0]!.split(",");
+    const reportDateIdx = header.indexOf("reportDate");
+    const estimateIdx = header.indexOf("estimate");
+    // Rows are already sorted by reportDate ascending; the first data row is the nearest upcoming date.
+    const firstRow = lines[1]!.split(",");
+
+    return {
+      symbol,
+      nextReportDate: reportDateIdx >= 0 ? firstRow[reportDateIdx] || null : null,
+      estimate: estimateIdx >= 0 ? firstRow[estimateIdx] || null : null,
+    };
   }
 
   async getNews(symbol: string): Promise<NewsItem[]> {
