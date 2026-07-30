@@ -14,6 +14,12 @@ const envSchema = z.object({
 
   OPENAI_API_KEY: optionalNonEmpty(),
   ALPHA_VANTAGE_API_KEY: optionalNonEmpty(),
+  EODHD_API_KEY: optionalNonEmpty(),
+
+  // Which MarketDataProvider apps/api wires up. alpha-vantage has better US coverage
+  // for free; eodhd is paid but reaches mainland China (Shanghai/Shenzhen) and other
+  // exchanges alpha-vantage doesn't cover.
+  MARKET_DATA_PROVIDER: z.enum(["alpha-vantage", "eodhd"]).default("alpha-vantage"),
 
   // Hard daily spend ceiling enforced by the AI orchestrator, in USD.
   AI_DAILY_BUDGET_USD: z.coerce.number().default(2),

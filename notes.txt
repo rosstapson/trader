@@ -60,10 +60,21 @@ committed). Shape:
     DATABASE_URL=postgresql://trader:...@localhost:5432/trader
     OPENAI_API_KEY=...
     ALPHA_VANTAGE_API_KEY=...           # prod-only key, not the one used in local dev
+    MARKET_DATA_PROVIDER=alpha-vantage  # or "eodhd" — see below
+    EODHD_API_KEY=                      # only needed if MARKET_DATA_PROVIDER=eodhd
     AI_DAILY_BUDGET_USD=2
 
 (Port is 4001, not 4000 — 4000 was already taken by an unrelated app on
 this box. If you ever move to a fresh server, 4000 is fine.)
+
+MARKET_DATA PROVIDER CHOICE: alpha-vantage is free but only really covers
+US-listed securities (including Chinese ADRs like BABA, TCEHY) well —
+mainland China (Shanghai/Shenzhen) and Hong Kong listings aren't there.
+Set MARKET_DATA_PROVIDER=eodhd and add EODHD_API_KEY (paid, ~$20/mo,
+https://eodhd.com/pricing) to reach those — EODHD symbols are in
+CODE.EXCHANGE format, e.g. 600519.SHG (Shanghai), 000001.SHE (Shenzhen),
+0700.HK (Hong Kong), AAPL.US. Switching providers doesn't require a
+migration or code change — just the env var and a restart.
 
 Apply migrations once against the production database:
 

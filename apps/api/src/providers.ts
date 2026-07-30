@@ -1,6 +1,11 @@
 import { loadConfig } from "@trader/config";
 import { db } from "@trader/db";
-import { AlphaVantageProvider, CachedMarketDataProvider, type MarketDataProvider } from "@trader/market-data";
+import {
+  AlphaVantageProvider,
+  EODHDProvider,
+  CachedMarketDataProvider,
+  type MarketDataProvider,
+} from "@trader/market-data";
 import { OpenAIProvider, AgentOrchestrator, type LLMProvider } from "@trader/ai";
 
 const config = loadConfig();
@@ -15,12 +20,18 @@ export class MissingApiKeyError extends Error {
   }
 }
 
+function buildMarketDataProvider(): MarketDataProvider {
+  if (config.MARKET_DATA_PROVIDER === "eodhd") {
+    if (!config.EODHD_API_KEY) throw new MissingApiKeyError("EODHD_API_KEY");
+    return new EODHDProvider(config.EODHD_API_KEY);
+  }
+  if (!config.ALPHA_VANTAGE_API_KEY) throw new MissingApiKeyError("ALPHA_VANTAGE_API_KEY");
+  return new AlphaVantageProvider(config.ALPHA_VANTAGE_API_KEY);
+}
+
 export function getMarketDataProvider(): MarketDataProvider {
   if (marketDataProvider) return marketDataProvider;
-  if (!config.ALPHA_VANTAGE_API_KEY) throw new MissingApiKeyError("ALPHA_VANTAGE_API_KEY");
-
-  const inner = new AlphaVantageProvider(config.ALPHA_VANTAGE_API_KEY);
-  marketDataProvider = new CachedMarketDataProvider(inner, db);
+  marketDataProvider = new CachedMarketDataProvider(buildMarketDataProvider(), db);
   return marketDataProvider;
 }
 
