@@ -1,0 +1,23 @@
+{
+  "name": "@trader/ai",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@trader/config": "workspace:*",
+    "@trader/db": "workspace:*",
+    "@trader/shared": "workspace:*",
+    "drizzle-orm": "^0.36.4",
+    "openai": "^4.71.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "typescript": "^5.6.3"
+  }
+}

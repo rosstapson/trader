@@ -1,0 +1,20 @@
+{
+  "name": "trader",
+  "private": true,
+  "version": "0.0.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev:api": "pnpm --filter @trader/api dev",
+    "dev:web": "pnpm --filter @trader/web dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "db:generate": "pnpm --filter @trader/db generate",
+    "db:migrate": "pnpm --filter @trader/db migrate"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}
