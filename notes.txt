@@ -1,8 +1,9 @@
 TRADER — DEV & DEPLOYMENT NOTES
 ================================
 
-Prerequisites on the server: Node 20+, pnpm (`corepack enable`), PostgreSQL,
-nginx, an OpenAI API key, an Alpha Vantage API key.
+Live at: https://trader.zomg-media.co.za
+Server: ross@135.181.84.227 (shared hobby box — also runs media-api and
+zomg-pad-api via the same PM2 instance; don't touch those processes/ports).
 
 
 1. LOCAL DEVELOPMENT
@@ -24,41 +25,53 @@ Run both dev servers, each in its own terminal:
     pnpm install --frozen-lockfile
     pnpm build
 
-This builds every package and produces:
+This produces apps/web/dist/ (static frontend) and apps/api/dist/.
 
-    apps/web/dist/     — static frontend, serve directly with nginx
-    apps/api/dist/      — compiled API, run with `node dist/index.js`
+KNOWN GAP: apps/api/dist/index.js is NOT actually runnable with plain
+`node` yet — it imports the workspace packages (@trader/config,
+@trader/shared, @trader/db, @trader/market-data, @trader/ai) via their
+package.json "main", which still points at raw ./src/index.ts. Only tsx
+(dev) can resolve that. Until those packages get real compiled dist/
+outputs + exports maps (a real but not urgent piece of follow-up work),
+production also runs the API through tsx — see ecosystem.config.js.
+`pnpm build` is still worth running before deploy because it (a) is the
+fastest typecheck of the whole tree and (b) produces apps/web/dist, which
+IS what's actually served.
 
 
 3. RUNNING THE API IN PRODUCTION (PM2)
 -----------------------------------------
 
-Put production values in .env at the repo root (same shape as .env.example):
+Production .env lives at the repo root on the server (gitignored, never
+committed). Shape:
 
     NODE_ENV=production
-    PORT=4000
-    DATABASE_URL=postgresql://...
+    PORT=4001
+    DATABASE_URL=postgresql://trader:...@localhost:5432/trader
     OPENAI_API_KEY=...
     ALPHA_VANTAGE_API_KEY=...
     AI_DAILY_BUDGET_USD=2
+
+(Port is 4001, not 4000 — 4000 was already taken by an unrelated app on
+this box. If you ever move to a fresh server, 4000 is fine.)
 
 Apply migrations once against the production database:
 
     pnpm --filter @trader/db migrate
 
-Install PM2 if it isn't already on the box:
-
-    npm install -g pm2
-
-The repo includes ecosystem.config.js at the root, which points PM2 at
-apps/api/dist/index.js and loads the root .env via Node's native
---env-file flag (needs Node 20.6+ — anything reasonably recent is fine,
-no extra dependency required). Start it from the repo root:
+ecosystem.config.js (repo root) is already set up correctly — don't
+"simplify" it back to `node dist/index.js` or a `env_file` option, both
+were tried and don't work (see comments in the file for why: no compiled
+dist for the workspace packages yet, and PM2 has no real `env_file`
+option despite it looking like it should). It runs the API via tsx in
+fork mode and loads .env via Node's native --env-file flag.
 
     pm2 start ecosystem.config.js
     pm2 save            # persists the process list across reboots
-    pm2 startup          # prints a one-time command to run so PM2 itself
-                          # starts on boot — run what it prints, once
+
+PM2 startup-on-boot (systemd unit `pm2-ross`) was already configured on
+this server before trader-api existed — pm2 save is enough, no need to
+run `pm2 startup` again.
 
 Useful commands:
 
@@ -69,27 +82,22 @@ Useful commands:
 
 
 4. NGINX
---------
 
-The frontend calls the API via relative "/api/..." paths, so serving both
-through the same nginx origin means no CORS config or VITE_API_BASE_URL is
-needed — just proxy /api to the Node process and serve the built static
-files for everything else. Client-side routes (e.g. /watchlists/:id) need
-the try_files fallback to index.html or a page refresh will 404.
+The live config is /etc/nginx/sites-available/trader.zomg-media.co.za
+(symlinked into sites-enabled), matching the pattern already used by this
+server's other sites (app.zomg-media.co.za etc). Frontend files are
+copied to /var/www/trader.zomg-media.co.za/ — nginx does NOT serve
+directly out of the repo's apps/web/dist, so a redeploy must re-copy (see
+§5). TLS is a certbot-issued Let's Encrypt cert, auto-renewing.
 
     server {
-        listen 80;
-        server_name trader.example.com;   # <- change this
+        server_name trader.zomg-media.co.za;
 
-        root /opt/trader/apps/web/dist;
+        root /var/www/trader.zomg-media.co.za;
         index index.html;
 
-        location / {
-            try_files $uri /index.html;
-        }
-
         location /api/ {
-            proxy_pass http://127.0.0.1:4000;
+            proxy_pass http://127.0.0.1:4001;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
@@ -97,21 +105,46 @@ the try_files fallback to index.html or a page refresh will 404.
             proxy_set_header X-Forwarded-Proto $scheme;
         }
 
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+
+        add_header X-Frame-Options "SAMEORIGIN";
+        add_header X-XSS-Protection "1; mode=block";
+        add_header X-Content-Type-Options "nosniff";
+
         gzip on;
         gzip_types text/css application/javascript application/json;
+
+        listen 443 ssl; # managed by Certbot
+        ssl_certificate /etc/letsencrypt/live/trader.zomg-media.co.za/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/trader.zomg-media.co.za/privkey.pem;
+        include /etc/letsencrypt/options-ssl-nginx.conf;
+        ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+    }
+    server {
+        if ($host = trader.zomg-media.co.za) { return 301 https://$host$request_uri; }
+        server_name trader.zomg-media.co.za;
+        listen 80;
+        return 404;
     }
 
-Once this serves correctly over plain HTTP, add TLS with:
-
-    sudo certbot --nginx -d trader.example.com
+Port 4001 (and Postgres's 5432) are not reachable directly from the
+internet — confirmed the hosting provider filters everything except
+22/80/443 at the network level, even though `ufw` itself is inactive on
+the box. nginx is the only path in; no further hardening needed there.
 
 
 5. REDEPLOYING AFTER A CHANGE
 -------------------------------
 
+    ssh ross@135.181.84.227
+    cd /home/ross/dev/ross/trader
     git pull
     pnpm install --frozen-lockfile
     pnpm build
-    pnpm --filter @trader/db migrate     # only if the schema changed
+    pnpm --filter @trader/db migrate                          # only if the schema changed
+    sudo rm -rf /var/www/trader.zomg-media.co.za/*
+    sudo cp -r apps/web/dist/* /var/www/trader.zomg-media.co.za/
+    sudo chown -R www-data:www-data /var/www/trader.zomg-media.co.za
     pm2 restart trader-api
-    # nginx serves the new apps/web/dist automatically — no nginx restart needed
