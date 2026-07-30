@@ -5,12 +5,22 @@ Live at: https://trader.zomg-media.co.za
 Server: ross@135.181.84.227 (shared hobby box — also runs media-api and
 zomg-pad-api via the same PM2 instance; don't touch those processes/ports).
 
+USE SEPARATE ALPHA VANTAGE KEYS FOR DEV AND PROD. The free tier caps out
+at 25 requests/day *per key* — one key shared between local dev and the
+live site means dev testing can (and did) burn through the day's quota
+before the site itself gets a chance to use it, and vice versa. Sign up
+for a second free key at https://www.alphavantage.co/support/#api-key
+and keep dev's .env and the server's .env pointing at different ones.
+OpenAI keys don't have this problem (billing-based, not a shared daily
+count), so reusing the same OpenAI key across dev/prod is fine.
+
 
 1. LOCAL DEVELOPMENT
 ---------------------
 
     pnpm install
     cp .env.example .env        # fill in DATABASE_URL + both API keys
+                                  # (use a dev-only Alpha Vantage key — see note above)
     pnpm db:migrate              # apply schema to Postgres
 
 Run both dev servers, each in its own terminal:
@@ -49,7 +59,7 @@ committed). Shape:
     PORT=4001
     DATABASE_URL=postgresql://trader:...@localhost:5432/trader
     OPENAI_API_KEY=...
-    ALPHA_VANTAGE_API_KEY=...
+    ALPHA_VANTAGE_API_KEY=...           # prod-only key, not the one used in local dev
     AI_DAILY_BUDGET_USD=2
 
 (Port is 4001, not 4000 — 4000 was already taken by an unrelated app on
