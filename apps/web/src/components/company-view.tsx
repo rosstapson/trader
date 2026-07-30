@@ -1,10 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Confidence } from "@trader/shared";
-import { getCompanyOverview, getCompanySummary } from "@/lib/api";
+import { getCompanyOverview, getCompanySummary, getDividendHistory, getPriceHistory } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Term } from "@/components/ui/term";
 import { Disclaimer } from "@/components/disclaimer";
+import { PriceChart } from "@/components/price-chart";
+import { DividendHistory } from "@/components/dividend-history";
 
 const CONFIDENCE_COLOR: Record<Confidence, string> = {
   low: "border-red-300 text-red-700 dark:border-red-800 dark:text-red-400",
@@ -21,6 +24,18 @@ export function CompanyView({ symbol, onBack }: { symbol: string; onBack: () => 
   const summaryQuery = useQuery({
     queryKey: ["summary", symbol],
     queryFn: () => getCompanySummary(symbol),
+    enabled: false,
+  });
+
+  const pricesQuery = useQuery({
+    queryKey: ["prices", symbol],
+    queryFn: () => getPriceHistory(symbol),
+    enabled: false,
+  });
+
+  const dividendsQuery = useQuery({
+    queryKey: ["dividends", symbol],
+    queryFn: () => getDividendHistory(symbol),
     enabled: false,
   });
 
@@ -64,12 +79,64 @@ export function CompanyView({ symbol, onBack }: { symbol: string; onBack: () => 
               <CardTitle>Fundamentals</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
-              <span>P/E: {overview.financials.peRatio ?? "n/a"}</span>
-              <span>EPS: {overview.financials.eps ?? "n/a"}</span>
-              <span>Dividend/share: {overview.financials.dividendPerShare ?? "n/a"}</span>
-              <span>Dividend yield: {overview.financials.dividendYield ?? "n/a"}</span>
-              <span>Market cap: {overview.financials.marketCap ?? "n/a"}</span>
-              <span>Revenue (TTM): {overview.financials.revenueTtm ?? "n/a"}</span>
+              <span>
+                <Term term="peRatio">P/E</Term>: {overview.financials.peRatio ?? "n/a"}
+              </span>
+              <span>
+                <Term term="eps">EPS</Term>: {overview.financials.eps ?? "n/a"}
+              </span>
+              <span>
+                <Term term="dividendPerShare">Dividend/share</Term>: {overview.financials.dividendPerShare ?? "n/a"}
+              </span>
+              <span>
+                <Term term="dividendYield">Dividend yield</Term>: {overview.financials.dividendYield ?? "n/a"}
+              </span>
+              <span>
+                <Term term="marketCap">Market cap</Term>: {overview.financials.marketCap ?? "n/a"}
+              </span>
+              <span>
+                <Term term="revenueTtm">Revenue (TTM)</Term>: {overview.financials.revenueTtm ?? "n/a"}
+              </span>
+              <span>
+                <Term term="profitMargin">Profit margin</Term>: {overview.financials.profitMargin ?? "n/a"}
+              </span>
+              <span>
+                <Term term="sharesOutstanding">Shares outstanding</Term>: {overview.financials.sharesOutstanding ?? "n/a"}
+              </span>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex-row items-center justify-between">
+              <CardTitle>Price history</CardTitle>
+              <Button size="sm" onClick={() => pricesQuery.refetch()} disabled={pricesQuery.isFetching}>
+                {pricesQuery.isFetching ? "Loading…" : pricesQuery.data ? "Refresh" : "Show chart"}
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {pricesQuery.isError && <p className="text-sm text-red-600">{(pricesQuery.error as Error).message}</p>}
+              {pricesQuery.data && <PriceChart data={pricesQuery.data} />}
+              {!pricesQuery.data && !pricesQuery.isFetching && !pricesQuery.isError && (
+                <p className="text-sm text-neutral-500">Last ~100 trading days of closing prices.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex-row items-center justify-between">
+              <CardTitle>Dividend history</CardTitle>
+              <Button size="sm" onClick={() => dividendsQuery.refetch()} disabled={dividendsQuery.isFetching}>
+                {dividendsQuery.isFetching ? "Loading…" : dividendsQuery.data ? "Refresh" : "Show history"}
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {dividendsQuery.isError && (
+                <p className="text-sm text-red-600">{(dividendsQuery.error as Error).message}</p>
+              )}
+              {dividendsQuery.data && <DividendHistory dividends={dividendsQuery.data} />}
+              {!dividendsQuery.data && !dividendsQuery.isFetching && !dividendsQuery.isError && (
+                <p className="text-sm text-neutral-500">Most recent dividend payments, if any.</p>
+              )}
             </CardContent>
           </Card>
 

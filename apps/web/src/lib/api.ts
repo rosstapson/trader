@@ -1,4 +1,4 @@
-import type { CompanySearchResult, CompanyOverview, ResearchSummary } from "@trader/shared";
+import type { CompanySearchResult, CompanyOverview, ResearchSummary, DividendEvent, PricePoint } from "@trader/shared";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -33,4 +33,12 @@ export type ResearchSummaryResponse = ResearchSummary & { cached: boolean; costU
 
 export function getCompanySummary(symbol: string): Promise<ResearchSummaryResponse> {
   return get(`/api/companies/${encodeURIComponent(symbol)}/summary`);
+}
+
+export function getDividendHistory(symbol: string): Promise<DividendEvent[]> {
+  return get(`/api/companies/${encodeURIComponent(symbol)}/dividends`);
+}
+
+export function getPriceHistory(symbol: string): Promise<PricePoint[]> {
+  return get(`/api/companies/${encodeURIComponent(symbol)}/prices`);
 }

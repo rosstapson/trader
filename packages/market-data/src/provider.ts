@@ -1,4 +1,13 @@
-import type { CompanySearchResult, Quote, Financials, NewsItem, CompanyProfile } from "@trader/shared";
+import type {
+  CompanySearchResult,
+  Quote,
+  Financials,
+  NewsItem,
+  CompanyProfile,
+  DividendEvent,
+  PricePoint,
+  CashFlowSummary,
+} from "@trader/shared";
 
 /**
  * Every market data source (free tier today, premium feed later) implements this.
@@ -11,6 +20,9 @@ export interface MarketDataProvider {
   getQuote(symbol: string): Promise<Quote>;
   getFinancials(symbol: string): Promise<Financials>;
   getNews(symbol: string): Promise<NewsItem[]>;
+  getDividendHistory(symbol: string): Promise<DividendEvent[]>;
+  getPriceHistory(symbol: string): Promise<PricePoint[]>;
+  getCashFlow(symbol: string): Promise<CashFlowSummary>;
 }
 
 export class MarketDataError extends Error {

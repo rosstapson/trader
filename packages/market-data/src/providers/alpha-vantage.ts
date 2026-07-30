@@ -1,4 +1,13 @@
-import type { CompanySearchResult, Quote, Financials, NewsItem, CompanyProfile } from "@trader/shared";
+import type {
+  CompanySearchResult,
+  Quote,
+  Financials,
+  NewsItem,
+  CompanyProfile,
+  DividendEvent,
+  PricePoint,
+  CashFlowSummary,
+} from "@trader/shared";
 import type { MarketDataProvider } from "../provider.js";
 import { MarketDataError } from "../provider.js";
 
@@ -48,7 +57,12 @@ export class AlphaVantageProvider implements MarketDataProvider {
     }
     url.searchParams.set("apikey", this.apiKey);
 
-    const res = await fetch(url);
+    let res: Response;
+    try {
+      res = await fetch(url);
+    } catch (err) {
+      throw new MarketDataError("Alpha Vantage request failed", this.name, err);
+    }
     if (!res.ok) {
       throw new MarketDataError(`Alpha Vantage HTTP ${res.status}`, this.name);
     }
@@ -132,7 +146,59 @@ export class AlphaVantageProvider implements MarketDataProvider {
       marketCap: num(data.MarketCapitalization),
       revenueTtm: num(data.RevenueTTM),
       profitMargin: num(data.ProfitMargin),
+      sharesOutstanding: num(data.SharesOutstanding),
     };
+  }
+
+  async getDividendHistory(symbol: string): Promise<DividendEvent[]> {
+    const data = await this.request<{
+      data?: { ex_dividend_date: string; payment_date?: string; amount: string }[];
+    }>({
+      function: "DIVIDENDS",
+      symbol,
+    });
+    return (data.data ?? [])
+      .filter((d) => d.amount && d.amount !== "None")
+      .sort((a, b) => b.ex_dividend_date.localeCompare(a.ex_dividend_date))
+      .slice(0, 20)
+      .map((d) => ({
+        exDividendDate: d.ex_dividend_date,
+        paymentDate: d.payment_date && d.payment_date !== "None" ? d.payment_date : null,
+        amount: d.amount,
+      }));
+  }
+
+  async getPriceHistory(symbol: string): Promise<PricePoint[]> {
+    const data = await this.request<{
+      "Time Series (Daily)"?: Record<string, { "4. close": string }>;
+    }>({
+      function: "TIME_SERIES_DAILY",
+      symbol,
+      outputsize: "compact",
+    });
+    const series = data["Time Series (Daily)"] ?? {};
+    return Object.entries(series)
+      .map(([date, values]) => ({ date, close: values["4. close"] }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  async getCashFlow(symbol: string): Promise<CashFlowSummary> {
+    const data = await this.request<{
+      annualReports?: { fiscalDateEnding: string; operatingCashflow?: string; capitalExpenditures?: string }[];
+    }>({
+      function: "CASH_FLOW",
+      symbol,
+    });
+    const latest = data.annualReports?.[0];
+    if (!latest) {
+      return { symbol, freeCashFlow: null, fiscalDateEnding: null };
+    }
+
+    const operating = latest.operatingCashflow && latest.operatingCashflow !== "None" ? Number(latest.operatingCashflow) : null;
+    const capex = latest.capitalExpenditures && latest.capitalExpenditures !== "None" ? Number(latest.capitalExpenditures) : null;
+    const freeCashFlow = operating !== null && capex !== null ? String(operating - capex) : null;
+
+    return { symbol, freeCashFlow, fiscalDateEnding: latest.fiscalDateEnding ?? null };
   }
 
   async getNews(symbol: string): Promise<NewsItem[]> {

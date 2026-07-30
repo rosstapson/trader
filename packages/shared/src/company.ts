@@ -27,8 +27,29 @@ export const financialsSchema = z.object({
   marketCap: z.string().nullable().optional(),
   revenueTtm: z.string().nullable().optional(),
   profitMargin: z.string().nullable().optional(),
+  sharesOutstanding: z.string().nullable().optional(),
 });
 export type Financials = z.infer<typeof financialsSchema>;
+
+export const dividendEventSchema = z.object({
+  exDividendDate: z.string(),
+  paymentDate: z.string().nullable(),
+  amount: z.string(),
+});
+export type DividendEvent = z.infer<typeof dividendEventSchema>;
+
+export const pricePointSchema = z.object({
+  date: z.string(),
+  close: z.string(),
+});
+export type PricePoint = z.infer<typeof pricePointSchema>;
+
+export const cashFlowSummarySchema = z.object({
+  symbol: z.string(),
+  freeCashFlow: z.string().nullable(),
+  fiscalDateEnding: z.string().nullable(),
+});
+export type CashFlowSummary = z.infer<typeof cashFlowSummarySchema>;
 
 export const newsItemSchema = z.object({
   title: z.string(),

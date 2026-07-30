@@ -1,7 +1,16 @@
 import { eq } from "drizzle-orm";
 import type { Db } from "@trader/db";
 import { marketDataCache } from "@trader/db";
-import type { CompanySearchResult, Quote, Financials, NewsItem, CompanyProfile } from "@trader/shared";
+import type {
+  CompanySearchResult,
+  Quote,
+  Financials,
+  NewsItem,
+  CompanyProfile,
+  DividendEvent,
+  PricePoint,
+  CashFlowSummary,
+} from "@trader/shared";
 import type { MarketDataProvider } from "../provider.js";
 
 const TTL_MS = {
@@ -10,6 +19,9 @@ const TTL_MS = {
   quote: 15 * 60 * 1000, // price is the most volatile thing we cache
   financials: 24 * 60 * 60 * 1000, // fundamentals update quarterly at most
   news: 60 * 60 * 1000,
+  dividends: 24 * 60 * 60 * 1000, // declared quarterly at most
+  priceHistory: 4 * 60 * 60 * 1000, // daily closes; refresh a few times a day, not every request
+  cashflow: 24 * 60 * 60 * 1000, // used for the DCF estimate; annual filings
 } as const;
 
 /**
@@ -71,5 +83,17 @@ export class CachedMarketDataProvider implements MarketDataProvider {
 
   getNews(symbol: string): Promise<NewsItem[]> {
     return this.cached("news", symbol, () => this.inner.getNews(symbol));
+  }
+
+  getDividendHistory(symbol: string): Promise<DividendEvent[]> {
+    return this.cached("dividends", symbol, () => this.inner.getDividendHistory(symbol));
+  }
+
+  getPriceHistory(symbol: string): Promise<PricePoint[]> {
+    return this.cached("priceHistory", symbol, () => this.inner.getPriceHistory(symbol));
+  }
+
+  getCashFlow(symbol: string): Promise<CashFlowSummary> {
+    return this.cached("cashflow", symbol, () => this.inner.getCashFlow(symbol));
   }
 }

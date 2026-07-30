@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { db, companies } from "@trader/db";
 import { ResearchAgent } from "@trader/ai";
-import type { CompanyOverview } from "@trader/shared";
+import { computeValuations, type CompanyOverview } from "@trader/shared";
 import { getMarketDataProvider, getOrchestrator } from "../providers.js";
 import { getDefaultUserId } from "../user.js";
 
@@ -65,15 +65,43 @@ companiesRouter.get("/:symbol/overview", async (req, res, next) => {
   }
 });
 
+companiesRouter.get("/:symbol/dividends", async (req, res, next) => {
+  try {
+    const symbol = z.string().min(1).parse(req.params.symbol).toUpperCase();
+    const dividends = await getMarketDataProvider().getDividendHistory(symbol);
+    res.json(dividends);
+  } catch (err) {
+    next(err);
+  }
+});
+
+companiesRouter.get("/:symbol/prices", async (req, res, next) => {
+  try {
+    const symbol = z.string().min(1).parse(req.params.symbol).toUpperCase();
+    const prices = await getMarketDataProvider().getPriceHistory(symbol);
+    res.json(prices);
+  } catch (err) {
+    next(err);
+  }
+});
+
 companiesRouter.get("/:symbol/summary", async (req, res, next) => {
   try {
     const symbol = z.string().min(1).parse(req.params.symbol).toUpperCase();
     const overview = await fetchOverview(symbol);
     await cacheCompanyProfile(overview);
 
+    const cashFlow = await getMarketDataProvider().getCashFlow(symbol);
+    const valuations = computeValuations({
+      eps: overview.financials.eps,
+      dividendPerShare: overview.financials.dividendPerShare,
+      sharesOutstanding: overview.financials.sharesOutstanding,
+      freeCashFlow: cashFlow.freeCashFlow,
+    });
+
     const userId = await getDefaultUserId();
     const agent = new ResearchAgent(getOrchestrator());
-    const result = await agent.summarize(userId, overview);
+    const result = await agent.summarize(userId, overview, valuations, cashFlow);
 
     res.json({ ...result.output, cached: result.cached, costUsd: result.costUsd });
   } catch (err) {

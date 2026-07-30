@@ -11,6 +11,7 @@
     "dev:web": "pnpm --filter @trader/web dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
     "lint": "pnpm -r lint",
     "db:generate": "pnpm --filter @trader/db generate",
     "db:migrate": "pnpm --filter @trader/db migrate"
